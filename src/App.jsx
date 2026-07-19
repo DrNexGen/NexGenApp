@@ -6,8 +6,8 @@ import TodayScreen from './components/TodayScreen.jsx'
 import DuesScreen from './components/DuesScreen.jsx'
 import ReportsScreen from './components/ReportsScreen.jsx'
 import MoreScreen from './components/MoreScreen.jsx'
-import { hasStaffCode, isAdmin, lock } from './lib/store.js'
-import { CLINIC_NAME, CLINIC_TAGLINE, IS_DEMO } from './config.js'
+import { hasStaffCode, isAdmin, canSeeReports, getScopeDoctor, lock } from './lib/store.js'
+import { CLINIC_NAME, CLINIC_TAGLINE, IS_DEMO, deptForDoctor } from './config.js'
 
 const TAB_TITLES = {
   patients: null, // home tab shows the plain clinic name
@@ -27,11 +27,12 @@ export default function App() {
   if (!unlocked) return <Shell><PasscodeGate onUnlock={() => setUnlocked(true)} /></Shell>
 
   const admin = isAdmin()
+  const scopeDoctor = getScopeDoctor()
   const tabs = [
     { key: 'patients', label: 'Patients', icon: IconUsers },
     { key: 'today', label: 'Appointments', icon: IconCalendar },
     { key: 'dues', label: 'Dues', icon: IconRupee },
-    ...(admin ? [{ key: 'reports', label: 'Reports', icon: IconChart }] : []),
+    ...(canSeeReports() ? [{ key: 'reports', label: 'Reports', icon: IconChart }] : []),
     { key: 'more', label: 'More', icon: IconDots },
   ]
 
@@ -54,9 +55,10 @@ export default function App() {
 
   const suffix = patientId ? patientName : TAB_TITLES[tab]
   const title = suffix ? `${CLINIC_NAME} - ${suffix}` : CLINIC_NAME
+  const subtitle = scopeDoctor ? `${scopeDoctor} · ${deptForDoctor(scopeDoctor)}` : CLINIC_TAGLINE
 
   return (
-    <Shell title={title}>
+    <Shell title={title} subtitle={subtitle}>
       <main className="content">
         {patientId ? (
           <PatientDetail id={patientId} onBack={closePatient} onName={setPatientName} />
@@ -66,7 +68,7 @@ export default function App() {
           <TodayScreen onOpen={openPatient} />
         ) : tab === 'dues' ? (
           <DuesScreen onOpen={openPatient} />
-        ) : tab === 'reports' && admin ? (
+        ) : tab === 'reports' && canSeeReports() ? (
           <ReportsScreen onOpen={openPatient} />
         ) : (
           <MoreScreen onLock={doLock} />
@@ -88,7 +90,7 @@ export default function App() {
   )
 }
 
-function Shell({ title, children }) {
+function Shell({ title, subtitle, children }) {
   return (
     <div className="app">
       <header className="header">
@@ -102,7 +104,7 @@ function Shell({ title, children }) {
           </div>
           <div className="header-text">
             <h1>{title || CLINIC_NAME}</h1>
-            <p className="tagline">{CLINIC_TAGLINE}</p>
+            <p className="tagline">{subtitle || CLINIC_TAGLINE}</p>
           </div>
         </div>
         {IS_DEMO && <div className="demo-banner">Demo mode — data is saved on this device only</div>}

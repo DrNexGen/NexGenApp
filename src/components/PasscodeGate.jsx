@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { verifyPasscode, setSession } from '../lib/store.js'
-import { IS_DEMO, DEMO_STAFF_PASSCODE, DEMO_ADMIN_PASSCODE } from '../config.js'
+import { IS_DEMO, DEMO_STAFF_PASSCODE, DEMO_ADMIN_PASSCODE, DEMO_DOCTOR_PASSCODES, parseRole } from '../config.js'
 
 export default function PasscodeGate({ onUnlock }) {
   const [code, setCode] = useState('')
@@ -13,9 +13,9 @@ export default function PasscodeGate({ onUnlock }) {
     setChecking(true)
     setError('')
     try {
-      const role = await verifyPasscode(code.trim())
-      if (role) {
-        setSession(code.trim(), role)
+      const parsed = parseRole(await verifyPasscode(code.trim()))
+      if (parsed) {
+        setSession(code.trim(), parsed.role, parsed.doctor)
         onUnlock()
       } else {
         setError('Incorrect passcode. Please try again.')
@@ -37,10 +37,15 @@ export default function PasscodeGate({ onUnlock }) {
             <circle cx="12" cy="15.5" r="1.6" fill="currentColor" stroke="none" />
           </svg>
         </div>
-        <h2>Clinic access</h2>
+        <h2>Hospital access</h2>
         <p className="gate-hint">
-          Patient records are private. Enter the clinic passcode to continue.
-          {IS_DEMO && <> (Demo passcodes — staff: <strong>{DEMO_STAFF_PASSCODE}</strong>, admin: <strong>{DEMO_ADMIN_PASSCODE}</strong>)</>}
+          Patient records are private. Enter your passcode to continue.
+          {IS_DEMO && (
+            <><br />Demo — staff: <strong>{DEMO_STAFF_PASSCODE}</strong>, admin: <strong>{DEMO_ADMIN_PASSCODE}</strong>
+            {Object.entries(DEMO_DOCTOR_PASSCODES).map(([code, name]) => (
+              <span key={code}>, {name.replace('Dr. ', '')}: <strong>{code}</strong></span>
+            ))}</>
+          )}
         </p>
         <form onSubmit={submit} className="gate-form">
           <input

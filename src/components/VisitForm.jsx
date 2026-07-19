@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { addVisit, updateVisit, addReport } from '../lib/store.js'
+import { addVisit, updateVisit, addReport, getScopeDoctor } from '../lib/store.js'
 import { prepareReportFile } from '../lib/images.js'
 import {
   DOCTORS, deptForDoctor, categoriesFor, PAYMENT_MODES, BODY_REGIONS, TIME_SLOTS, to12h,
@@ -10,6 +10,8 @@ export default function VisitForm({ patientId, existing, reports = [], onReports
   // Booking (new) captures only when + why + which doctor. Money, outcomes and
   // a follow-up are filled in afterwards by editing the appointment once done.
   const isEdit = existing != null
+  // A doctor login can only create appointments for themselves.
+  const lockedDoctor = getScopeDoctor()
   const nowLocalDate = toLocalInput(new Date().toISOString()).split('T')[0]
   const [initDate, initTime] = existing?.visit_at
     ? toLocalInput(existing.visit_at).split('T')
@@ -19,7 +21,7 @@ export default function VisitForm({ patientId, existing, reports = [], onReports
     : ['', '']
 
   const [form, setForm] = useState({
-    doctor: existing?.doctor || '',
+    doctor: existing?.doctor || lockedDoctor || '',
     visit_date: initDate,
     visit_time: initTime,
     category: existing?.category || '',
@@ -139,12 +141,18 @@ export default function VisitForm({ patientId, existing, reports = [], onReports
         {!isEdit && (
           <p className="form-hint">Book the appointment now. After the consultation, open it again to add the fee, payment, and reports.</p>
         )}
-        <Field label="Doctor" required error={errors.doctor}>
-          <select value={form.doctor} onChange={set('doctor')}>
-            <option value="">Select…</option>
-            {DOCTORS.map((d) => <option key={d.name} value={d.name}>{d.name} — {d.dept}</option>)}
-          </select>
-        </Field>
+        {lockedDoctor ? (
+          <Field label="Doctor">
+            <input value={`${lockedDoctor} — ${deptForDoctor(lockedDoctor)}`} readOnly className="readonly-field" />
+          </Field>
+        ) : (
+          <Field label="Doctor" required error={errors.doctor}>
+            <select value={form.doctor} onChange={set('doctor')}>
+              <option value="">Select…</option>
+              {DOCTORS.map((d) => <option key={d.name} value={d.name}>{d.name} — {d.dept}</option>)}
+            </select>
+          </Field>
+        )}
         <div className="field-row">
           <Field label="Date" required error={errors.visit_date}>
             <input type="date" value={form.visit_date} onChange={set('visit_date')} />

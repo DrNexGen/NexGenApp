@@ -1,23 +1,27 @@
 import { createClient } from '@supabase/supabase-js'
 import {
   SUPABASE_URL, SUPABASE_ANON_KEY, IS_DEMO,
-  DEMO_STAFF_PASSCODE, DEMO_ADMIN_PASSCODE,
+  DEMO_STAFF_PASSCODE, DEMO_ADMIN_PASSCODE, DEMO_DOCTOR_PASSCODES, parseRole,
 } from '../config.js'
 import { joinDataUrl } from './images.js'
 
 const supabase = IS_DEMO ? null : createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 // The passcode is kept in memory + sessionStorage after unlock and sent
-// with every call; the server verifies it on each request. Which passcode
-// was used (staff vs admin) determines the role.
-let staffCode = sessionStorage.getItem('dentalog_pass') || ''
-let role = sessionStorage.getItem('dentalog_role') || ''
+// with every call; the server verifies it on each request. The passcode
+// determines the role — admin (all data), a specific doctor (only their
+// data), or staff (limited, no money reports / deletes).
+let staffCode = sessionStorage.getItem('nexgen_pass') || ''
+let role = sessionStorage.getItem('nexgen_role') || ''
+let scopeDoctor = sessionStorage.getItem('nexgen_doctor') || ''
 
-export function setSession(code, r) {
+export function setSession(code, r, doctor) {
   staffCode = code
   role = r
-  sessionStorage.setItem('dentalog_pass', code)
-  sessionStorage.setItem('dentalog_role', r)
+  scopeDoctor = doctor || ''
+  sessionStorage.setItem('nexgen_pass', code)
+  sessionStorage.setItem('nexgen_role', r)
+  sessionStorage.setItem('nexgen_doctor', scopeDoctor)
 }
 
 export function hasStaffCode() {
@@ -32,6 +36,20 @@ export function isAdmin() {
   return role === 'admin'
 }
 
+export function isDoctor() {
+  return role === 'doctor'
+}
+
+// The doctor a doctor-login is scoped to (null for admin/staff = see all).
+export function getScopeDoctor() {
+  return scopeDoctor || null
+}
+
+// Admin + doctors get money reports; staff does not.
+export function canSeeReports() {
+  return role === 'admin' || role === 'doctor'
+}
+
 // For deletes when logged in as admin — the session code IS the admin code.
 export function sessionCode() {
   return staffCode
@@ -40,8 +58,10 @@ export function sessionCode() {
 export function lock() {
   staffCode = ''
   role = ''
-  sessionStorage.removeItem('dentalog_pass')
-  sessionStorage.removeItem('dentalog_role')
+  scopeDoctor = ''
+  sessionStorage.removeItem('nexgen_pass')
+  sessionStorage.removeItem('nexgen_role')
+  sessionStorage.removeItem('nexgen_doctor')
 }
 
 async function rpc(name, params) {
@@ -119,13 +139,30 @@ function byNextAppointment(a, b) {
 function demoCheck(code, admin = false) {
   if (admin) {
     if (code !== DEMO_ADMIN_PASSCODE) throw new Error('Admin passcode required')
-  } else if (code !== DEMO_STAFF_PASSCODE && code !== DEMO_ADMIN_PASSCODE) {
+  } else if (code !== DEMO_STAFF_PASSCODE && code !== DEMO_ADMIN_PASSCODE && !DEMO_DOCTOR_PASSCODES[code]) {
     throw new Error('Incorrect passcode')
   }
 }
 
-function patientStats(db, id) {
-  const vs = db.visits.filter((v) => v.patient_id === id)
+// Money reports: admin or a doctor (scoped), never staff.
+function demoCheckReports(code) {
+  if (code !== DEMO_ADMIN_PASSCODE && !DEMO_DOCTOR_PASSCODES[code]) {
+    throw new Error('Not allowed')
+  }
+}
+
+// The doctor the current demo session is limited to (null = see all).
+function demoScope() {
+  return DEMO_DOCTOR_PASSCODES[staffCode] || null
+}
+
+// Visits for a patient, optionally limited to one doctor's visits.
+function patientVisits(db, id, scope) {
+  return db.visits.filter((v) => v.patient_id === id && (!scope || v.doctor === scope))
+}
+
+function patientStats(db, id, scope = null) {
+  const vs = patientVisits(db, id, scope)
   const ch = vs.reduce((a, v) => a + Number(v.fee_charged), 0)
   const rec = vs.reduce((a, v) => a + Number(v.payment_received), 0)
   const nowIso = new Date().toISOString()
@@ -148,11 +185,12 @@ function patientStats(db, id) {
 
 // ---------------- Public API ----------------
 
-// Returns 'admin', 'staff', or null.
+// Returns "admin" | "staff" | "doctor:Name" | null.
 export async function verifyPasscode(code) {
   if (IS_DEMO) {
     if (code === DEMO_ADMIN_PASSCODE) return 'admin'
     if (code === DEMO_STAFF_PASSCODE) return 'staff'
+    if (DEMO_DOCTOR_PASSCODES[code]) return `doctor:${DEMO_DOCTOR_PASSCODES[code]}`
     return null
   }
   const { data, error } = await supabase.rpc('verify_passcode', { p_passcode: code })
@@ -164,12 +202,15 @@ export async function listPatients(search = '') {
   if (IS_DEMO) {
     demoCheck(staffCode)
     const db = demoDb()
+    const scope = demoScope()
     const q = search.trim().toLowerCase()
     return db.patients
+      // A doctor only sees patients they've treated.
+      .filter((p) => !scope || patientVisits(db, p.id, scope).length > 0)
       .filter((p) => !q ||
         `${p.first_name} ${p.last_name}`.toLowerCase().includes(q) ||
         p.phone.includes(q.replace(/\s/g, '')))
-      .map((p) => ({ ...p, ...patientStats(db, p.id) }))
+      .map((p) => ({ ...p, ...patientStats(db, p.id, scope) }))
       .sort(byNextAppointment)
   }
   // Re-sort client-side too, so ordering is correct even if the database
@@ -184,11 +225,15 @@ export async function getPatient(id) {
   if (IS_DEMO) {
     demoCheck(staffCode)
     const db = demoDb()
+    const scope = demoScope()
+    const visits = patientVisits(db, id, scope)
+      .sort((a, b) => b.visit_at.localeCompare(a.visit_at))
+    const visitIds = new Set(visits.map((v) => v.id))
     return {
       patient: db.patients.find((p) => p.id === id) || null,
-      visits: db.visits.filter((v) => v.patient_id === id)
-        .sort((a, b) => b.visit_at.localeCompare(a.visit_at)),
-      reports: db.reports.filter((r) => r.patient_id === id)
+      visits,
+      // Doctors only see reports tied to their own visits.
+      reports: db.reports.filter((r) => r.patient_id === id && (!scope || visitIds.has(r.visit_id)))
         .map(({ dataUrl, ...meta }) => meta)
         .sort((a, b) => b.report_date.localeCompare(a.report_date)),
     }
@@ -252,8 +297,10 @@ export async function addVisit(patientId, f) {
   if (IS_DEMO) {
     demoCheck(staffCode)
     const db = demoDb()
+    const scope = demoScope()
     db.visits.push({
       id: crypto.randomUUID(), patient_id: patientId, ...f,
+      doctor: scope || f.doctor, // a doctor login can only create their own visits
       fee_charged: Number(f.fee_charged) || 0, payment_received: Number(f.payment_received) || 0,
       next_appointment: f.next_appointment || null, created_at: new Date().toISOString(),
     })
@@ -267,8 +314,9 @@ export async function updateVisit(id, f) {
   if (IS_DEMO) {
     demoCheck(staffCode)
     const db = demoDb()
+    const scope = demoScope()
     db.visits = db.visits.map((v) => (v.id === id
-      ? { ...v, ...f, fee_charged: Number(f.fee_charged) || 0, payment_received: Number(f.payment_received) || 0, next_appointment: f.next_appointment || null }
+      ? { ...v, ...f, doctor: scope || f.doctor, fee_charged: Number(f.fee_charged) || 0, payment_received: Number(f.payment_received) || 0, next_appointment: f.next_appointment || null }
       : v))
     demoSave(db)
     return
@@ -325,18 +373,19 @@ export async function deleteReport(id, adminCode) {
   await rpc('delete_report', { p_admin_passcode: adminCode, p_id: id })
 }
 
-// ---------- Money reports (admin only) ----------
+// ---------- Money reports (admin sees all; a doctor sees only their own) ----------
 
 export async function getReportsSummary() {
   if (IS_DEMO) {
-    demoCheck(staffCode, true)
+    demoCheckReports(staffCode)
     const db = demoDb()
+    const scope = demoScope()
     const now = new Date()
     const since = (months) => new Date(now.getFullYear(), now.getMonth() - months, now.getDate())
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
     const inRange = (v, from) => new Date(v.visit_at) >= from
     const rec = (list) => list.reduce((a, v) => a + Number(v.payment_received), 0)
-    const vs = db.visits
+    const vs = db.visits.filter((v) => !scope || v.doctor === scope)
     const last12 = vs.filter((v) => inRange(v, since(12)))
     const groupSum = (list, keyFn) => {
       const m = {}
@@ -384,18 +433,22 @@ export async function getReportsSummary() {
 
 export async function exportAll() {
   if (IS_DEMO) {
-    demoCheck(staffCode, true)
+    demoCheckReports(staffCode)
     const db = demoDb()
+    const scope = demoScope()
     const name = (id) => {
       const p = db.patients.find((x) => x.id === id)
       return p ? `${p.first_name} ${p.last_name}` : 'Unknown'
     }
     const phone = (id) => db.patients.find((x) => x.id === id)?.phone || ''
+    const scopedVisits = db.visits.filter((v) => !scope || v.doctor === scope)
+    const scopedVisitIds = new Set(scopedVisits.map((v) => v.id))
     return {
       patients: db.patients
-        .map((p) => ({ ...p, ...patientStats(db, p.id) }))
+        .filter((p) => !scope || patientVisits(db, p.id, scope).length > 0)
+        .map((p) => ({ ...p, ...patientStats(db, p.id, scope) }))
         .sort((a, b) => a.first_name.localeCompare(b.first_name)),
-      visits: db.visits
+      visits: scopedVisits
         .sort((a, b) => a.visit_at.localeCompare(b.visit_at))
         .map((v) => ({
           visit_at: v.visit_at, patient_name: name(v.patient_id), phone: phone(v.patient_id),
@@ -405,6 +458,7 @@ export async function exportAll() {
           next_appointment: v.next_appointment, notes: v.notes,
         })),
       reports: db.reports
+        .filter((r) => !scope || scopedVisitIds.has(r.visit_id))
         .map((r) => ({
           id: r.id, patient_name: name(r.patient_id), report_name: r.report_name,
           report_date: r.report_date, mime: r.mime,
@@ -419,6 +473,8 @@ export async function getDashboard() {
   if (IS_DEMO) {
     demoCheck(staffCode)
     const db = demoDb()
+    const scope = demoScope()
+    const visits = db.visits.filter((v) => !scope || v.doctor === scope)
     const now = new Date()
     const todayStr = now.toDateString()
     const tomorrow = new Date(now)
@@ -429,14 +485,14 @@ export async function getDashboard() {
       return p ? `${p.first_name} ${p.last_name}` : 'Unknown'
     }
     const apptRow = (v) => ({ id: v.id, patient_id: v.patient_id, patient_name: name(v.patient_id), doctor: v.doctor, visit_at: v.visit_at, category: v.category, payment_received: v.payment_received, payment_mode: v.payment_mode })
-    const onDay = (str) => db.visits
+    const onDay = (str) => visits
       .filter((v) => new Date(v.visit_at).toDateString() === str)
       .sort((a, b) => a.visit_at.localeCompare(b.visit_at))
       .map(apptRow)
     return {
       today: onDay(todayStr),
       tomorrow: onDay(tomorrowStr),
-      followups: db.visits
+      followups: visits
         .filter((v) => v.next_appointment && new Date(v.next_appointment) >= new Date(now.getTime() - 12 * 3600 * 1000))
         .sort((a, b) => a.next_appointment.localeCompare(b.next_appointment))
         .map((v) => ({ id: v.id, patient_id: v.patient_id, patient_name: name(v.patient_id), doctor: v.doctor, next_appointment: v.next_appointment, category: v.category })),

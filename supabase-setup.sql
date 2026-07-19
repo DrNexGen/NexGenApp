@@ -60,11 +60,16 @@ create table if not exists public.app_secrets (
   value text not null
 );
 
--- >>> CHANGE THESE TWO PASSCODES (first run only; re-running this file
--- never overwrites passcodes you changed later) <<<
+-- >>> CHANGE THESE PASSCODES (first run only; re-running this file never
+-- overwrites passcodes you changed later) <<<
+--   staff  -> assistants (book/manage, no money reports, no deletes)
+--   admin  -> owner: sees ALL doctors' data, money reports, exports, deletes
+--   doc:...-> each doctor: sees ONLY their own patients/appointments/earnings
 insert into public.app_secrets (key, value) values
   ('staff_passcode', 'CHANGE-STAFF-1234'),
-  ('admin_passcode', 'CHANGE-ADMIN-9999')
+  ('admin_passcode', 'CHANGE-ADMIN-9999'),
+  ('doc_passcode:Dr. Varun', 'CHANGE-VARUN-1111'),
+  ('doc_passcode:Dr. Umashankar', 'CHANGE-UMA-2222')
 on conflict (key) do nothing;
 
 -- Lock everything down: RLS on, and NO policies at all.
@@ -75,19 +80,21 @@ alter table public.visits enable row level security;
 alter table public.reports enable row level security;
 alter table public.app_secrets enable row level security;
 
--- Staff check: the staff passcode OR the admin passcode is accepted
+-- Staff check: staff, admin, or any doctor passcode is accepted (all can
+-- read/write patient data; scoping limits WHAT a doctor sees).
 create or replace function public._check_staff(p_code text)
 returns void language plpgsql security definer set search_path = public as $$
 begin
   if not exists (
     select 1 from app_secrets
-    where key in ('staff_passcode', 'admin_passcode') and value = p_code
+    where value = p_code
+      and (key in ('staff_passcode', 'admin_passcode') or key like 'doc_passcode:%')
   ) then
     raise exception 'Incorrect passcode';
   end if;
 end; $$;
 
--- Admin check: only the admin passcode
+-- Admin check: only the admin passcode (used for deletes)
 create or replace function public._check_admin(p_code text)
 returns void language plpgsql security definer set search_path = public as $$
 begin
@@ -98,14 +105,38 @@ begin
   end if;
 end; $$;
 
--- Returns the role for a passcode: 'admin', 'staff', or null
+-- Money reports: admin OR a doctor (never staff)
+create or replace function public._check_reports(p_code text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (
+    select 1 from app_secrets
+    where value = p_code and (key = 'admin_passcode' or key like 'doc_passcode:%')
+  ) then
+    raise exception 'Not allowed';
+  end if;
+end; $$;
+
+-- The doctor a passcode is scoped to, or NULL for admin/staff (see all).
+create or replace function public._scope_doctor(p_code text)
+returns text language sql security definer set search_path = public as $$
+  select replace(key, 'doc_passcode:', '')
+  from app_secrets
+  where value = p_code and key like 'doc_passcode:%'
+  limit 1;
+$$;
+
+-- Returns the role for a passcode: 'admin', 'staff', 'doctor:Name', or null
 drop function if exists public.verify_passcode(text);
 create or replace function public.verify_passcode(p_passcode text)
 returns text language sql security definer set search_path = public as $$
   select case
     when exists (select 1 from app_secrets where key = 'admin_passcode' and value = p_passcode) then 'admin'
     when exists (select 1 from app_secrets where key = 'staff_passcode' and value = p_passcode) then 'staff'
-    else null
+    else (
+      select 'doctor:' || replace(key, 'doc_passcode:', '')
+      from app_secrets where value = p_passcode and key like 'doc_passcode:%' limit 1
+    )
   end;
 $$;
 
@@ -113,8 +144,10 @@ $$;
 
 create or replace function public.list_patients(p_passcode text, p_search text default '')
 returns jsonb language plpgsql security definer set search_path = public as $$
+declare scope text;
 begin
   perform _check_staff(p_passcode);
+  scope := _scope_doctor(p_passcode);  -- null = see all; else this doctor only
   return coalesce((
     -- Patients with a sooner upcoming appointment first; those with none last.
     select jsonb_agg(row_to_json(t)::jsonb
@@ -134,38 +167,44 @@ begin
                coalesce(sum(fee_charged), 0) ch,
                coalesce(sum(payment_received), 0) rec,
                max(visit_at) lv
-        from visits v where v.patient_id = p.id
+        from visits v where v.patient_id = p.id and (scope is null or v.doctor = scope)
       ) s on true
       left join lateral (
         select min(d) as next_appointment
         from (
-          select visit_at as d from visits where patient_id = p.id and visit_at >= now()
+          select visit_at as d from visits where patient_id = p.id and (scope is null or doctor = scope) and visit_at >= now()
           union all
-          select next_appointment as d from visits where patient_id = p.id and next_appointment >= now()
+          select next_appointment as d from visits where patient_id = p.id and (scope is null or doctor = scope) and next_appointment >= now()
         ) u
       ) na on true
-      where p_search is null or p_search = ''
+      -- A doctor only sees patients they have treated.
+      where (scope is null or exists (select 1 from visits v where v.patient_id = p.id and v.doctor = scope))
+        and (p_search is null or p_search = ''
          or (p.first_name || ' ' || p.last_name) ilike '%' || p_search || '%'
-         or p.phone like '%' || p_search || '%'
+         or p.phone like '%' || p_search || '%')
     ) t
   ), '[]'::jsonb);
 end; $$;
 
 create or replace function public.get_patient(p_passcode text, p_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
+declare scope text;
 begin
   perform _check_staff(p_passcode);
+  scope := _scope_doctor(p_passcode);
   return jsonb_build_object(
     'patient', (select row_to_json(p)::jsonb from patients p where p.id = p_id),
     'visits', coalesce((
       select jsonb_agg(row_to_json(v)::jsonb order by v.visit_at desc)
-      from visits v where v.patient_id = p_id
+      from visits v where v.patient_id = p_id and (scope is null or v.doctor = scope)
     ), '[]'::jsonb),
     'reports', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', r.id, 'visit_id', r.visit_id, 'report_date', r.report_date,
         'report_name', r.report_name, 'mime', r.mime) order by r.report_date desc)
       from reports r where r.patient_id = p_id
+        -- doctors only see reports attached to their own visits
+        and (scope is null or r.visit_id in (select id from visits where patient_id = p_id and doctor = scope))
     ), '[]'::jsonb)
   );
 end; $$;
@@ -210,12 +249,14 @@ create or replace function public.add_visit(
   p_affected_area text, p_treatment_details text, p_fee_charged numeric,
   p_payment_received numeric, p_payment_mode text, p_next_appointment timestamptz, p_notes text
 ) returns uuid language plpgsql security definer set search_path = public as $$
-declare new_id uuid;
+declare new_id uuid; scope text;
 begin
   perform _check_staff(p_passcode);
+  -- A doctor login can only create their own visits.
+  scope := _scope_doctor(p_passcode);
   insert into visits (patient_id, doctor, visit_at, category, affected_area, treatment_details,
     fee_charged, payment_received, payment_mode, next_appointment, notes)
-  values (p_patient_id, p_doctor, p_visit_at, p_category, p_affected_area, p_treatment_details,
+  values (p_patient_id, coalesce(scope, p_doctor), p_visit_at, p_category, p_affected_area, p_treatment_details,
     p_fee_charged, p_payment_received, p_payment_mode, p_next_appointment, p_notes)
   returning id into new_id;
   return new_id;
@@ -227,13 +268,16 @@ create or replace function public.update_visit(
   p_affected_area text, p_treatment_details text, p_fee_charged numeric,
   p_payment_received numeric, p_payment_mode text, p_next_appointment timestamptz, p_notes text
 ) returns void language plpgsql security definer set search_path = public as $$
+declare scope text;
 begin
   perform _check_staff(p_passcode);
-  update visits set doctor = p_doctor, visit_at = p_visit_at, category = p_category,
+  scope := _scope_doctor(p_passcode);
+  -- A doctor can only edit their own visits (and keeps them theirs).
+  update visits set doctor = coalesce(scope, p_doctor), visit_at = p_visit_at, category = p_category,
     affected_area = p_affected_area, treatment_details = p_treatment_details,
     fee_charged = p_fee_charged, payment_received = p_payment_received,
     payment_mode = p_payment_mode, next_appointment = p_next_appointment, notes = p_notes
-  where id = p_id;
+  where id = p_id and (scope is null or doctor = scope);
 end; $$;
 
 create or replace function public.delete_visit(p_admin_passcode text, p_id uuid)
@@ -280,8 +324,10 @@ end; $$;
 
 create or replace function public.get_dashboard(p_passcode text)
 returns jsonb language plpgsql security definer set search_path = public as $$
+declare scope text;
 begin
   perform _check_staff(p_passcode);
+  scope := _scope_doctor(p_passcode);
   return jsonb_build_object(
     'today', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -291,7 +337,7 @@ begin
         'payment_received', v.payment_received, 'payment_mode', v.payment_mode
       ) order by v.visit_at)
       from visits v join patients p on p.id = v.patient_id
-      where v.visit_at::date = current_date
+      where v.visit_at::date = current_date and (scope is null or v.doctor = scope)
     ), '[]'::jsonb),
     'tomorrow', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -301,7 +347,7 @@ begin
         'payment_received', v.payment_received, 'payment_mode', v.payment_mode
       ) order by v.visit_at)
       from visits v join patients p on p.id = v.patient_id
-      where v.visit_at::date = current_date + 1
+      where v.visit_at::date = current_date + 1 and (scope is null or v.doctor = scope)
     ), '[]'::jsonb),
     'followups', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -310,17 +356,19 @@ begin
         'doctor', v.doctor, 'next_appointment', v.next_appointment, 'category', v.category
       ) order by v.next_appointment)
       from visits v join patients p on p.id = v.patient_id
-      where v.next_appointment >= now() - interval '12 hours'
+      where v.next_appointment >= now() - interval '12 hours' and (scope is null or v.doctor = scope)
     ), '[]'::jsonb)
   );
 end; $$;
 
--- ---------- Money reports (ADMIN ONLY) ----------
+-- ---------- Money reports (admin sees all; a doctor sees only their own) ----------
 
 create or replace function public.get_reports_summary(p_admin_passcode text)
 returns jsonb language plpgsql security definer set search_path = public as $$
+declare scope text;
 begin
-  perform _check_admin(p_admin_passcode);
+  perform _check_reports(p_admin_passcode);
+  scope := _scope_doctor(p_admin_passcode);
   return jsonb_build_object(
     'totals', (
       select jsonb_build_object(
@@ -330,7 +378,7 @@ begin
         'twelve_months', coalesce(sum(payment_received) filter (where visit_at >= now() - interval '12 months'), 0),
         'all_time', coalesce(sum(payment_received), 0),
         'outstanding', coalesce(sum(fee_charged - payment_received), 0)
-      ) from visits
+      ) from visits where (scope is null or doctor = scope)
     ),
     'monthly', coalesce((
       select jsonb_agg(jsonb_build_object('month', m, 'total', t) order by m)
@@ -338,6 +386,7 @@ begin
         select to_char(visit_at, 'YYYY-MM') m, sum(payment_received) t
         from visits
         where visit_at >= date_trunc('month', now()) - interval '11 months'
+          and (scope is null or doctor = scope)
         group by 1
       ) x
     ), '[]'::jsonb),
@@ -346,7 +395,7 @@ begin
       from (
         select category, count(*) c, sum(payment_received) t
         from visits
-        where visit_at >= now() - interval '12 months'
+        where visit_at >= now() - interval '12 months' and (scope is null or doctor = scope)
         group by category
       ) x
     ), '[]'::jsonb),
@@ -355,7 +404,7 @@ begin
       from (
         select coalesce(payment_mode, 'Unspecified') payment_mode, sum(payment_received) t
         from visits
-        where visit_at >= now() - interval '12 months'
+        where visit_at >= now() - interval '12 months' and (scope is null or doctor = scope)
         group by 1
       ) x
     ), '[]'::jsonb),
@@ -364,7 +413,7 @@ begin
       from (
         select coalesce(doctor, 'Unassigned') doctor, count(*) c, sum(payment_received) t
         from visits
-        where visit_at >= now() - interval '12 months'
+        where visit_at >= now() - interval '12 months' and (scope is null or doctor = scope)
         group by 1
       ) x
     ), '[]'::jsonb),
@@ -375,7 +424,7 @@ begin
         select v.patient_id pid, p.first_name || ' ' || p.last_name pname,
                count(*) c, sum(v.payment_received) t
         from visits v join patients p on p.id = v.patient_id
-        where v.visit_at >= now() - interval '12 months'
+        where v.visit_at >= now() - interval '12 months' and (scope is null or v.doctor = scope)
         group by 1, 2
         order by sum(v.payment_received) desc
         limit 10
@@ -384,11 +433,13 @@ begin
   );
 end; $$;
 
--- Full data export / backup (ADMIN ONLY)
+-- Full data export / backup (admin = all; a doctor = only their own data)
 create or replace function public.export_all(p_admin_passcode text)
 returns jsonb language plpgsql security definer set search_path = public as $$
+declare scope text;
 begin
-  perform _check_admin(p_admin_passcode);
+  perform _check_reports(p_admin_passcode);
+  scope := _scope_doctor(p_admin_passcode);
   return jsonb_build_object(
     'patients', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -404,8 +455,9 @@ begin
         select count(*) c,
                coalesce(sum(fee_charged), 0) ch,
                coalesce(sum(payment_received), 0) rec
-        from visits v where v.patient_id = p.id
+        from visits v where v.patient_id = p.id and (scope is null or v.doctor = scope)
       ) s on true
+      where scope is null or exists (select 1 from visits v where v.patient_id = p.id and v.doctor = scope)
     ), '[]'::jsonb),
     'visits', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -423,6 +475,7 @@ begin
         'notes', v.notes
       ) order by v.visit_at)
       from visits v join patients p on p.id = v.patient_id
+      where scope is null or v.doctor = scope
     ), '[]'::jsonb),
     'reports', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -433,6 +486,7 @@ begin
         'mime', r.mime
       ) order by r.report_date)
       from reports r join patients p on p.id = r.patient_id
+      where scope is null or r.visit_id in (select id from visits where doctor = scope)
     ), '[]'::jsonb)
   );
 end; $$;
@@ -456,3 +510,5 @@ grant execute on function public.get_reports_summary(text) to anon;
 grant execute on function public.export_all(text) to anon;
 revoke execute on function public._check_staff(text) from anon;
 revoke execute on function public._check_admin(text) from anon;
+revoke execute on function public._check_reports(text) from anon;
+revoke execute on function public._scope_doctor(text) from anon;

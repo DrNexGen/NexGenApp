@@ -316,6 +316,12 @@ body {
   color: var(--teal-700);
 }
 
+.readonly-field {
+  background: var(--bg) !important;
+  color: var(--teal-900) !important;
+  font-weight: 600;
+}
+
 /* ---------- Medical alert picker ---------- */
 .alert-picker { display: flex; flex-wrap: wrap; gap: 6px; }
 

@@ -11,6 +11,21 @@ export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 export const IS_DEMO = !SUPABASE_URL || !SUPABASE_ANON_KEY
 export const DEMO_STAFF_PASSCODE = '1234'
 export const DEMO_ADMIN_PASSCODE = '9999'
+// Demo passcodes for each doctor login (see only their own data).
+export const DEMO_DOCTOR_PASSCODES = {
+  '1111': 'Dr. Varun',
+  '2222': 'Dr. Umashankar',
+}
+
+// Parse the server/demo passcode result "admin" | "staff" | "doctor:Name"
+// into a session object. Returns null for an unknown passcode.
+export function parseRole(result) {
+  if (!result) return null
+  if (result === 'admin') return { role: 'admin', doctor: null }
+  if (result === 'staff') return { role: 'staff', doctor: null }
+  if (result.startsWith('doctor:')) return { role: 'doctor', doctor: result.slice(7) }
+  return null
+}
 
 // The two practitioners, each with their department.
 export const DOCTORS = [
