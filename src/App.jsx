@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import LandingPage from './components/LandingPage.jsx'
 import PasscodeGate from './components/PasscodeGate.jsx'
 import PatientsScreen from './components/PatientsScreen.jsx'
 import PatientDetail from './components/PatientDetail.jsx'
@@ -18,13 +19,15 @@ const TAB_TITLES = {
 }
 
 export default function App() {
+  const [view, setView] = useState(hasStaffCode() ? 'app' : 'landing')
   const [unlocked, setUnlocked] = useState(hasStaffCode())
   const [tab, setTab] = useState('patients')
-  // When set, the patient detail screen covers the current tab.
   const [patientId, setPatientId] = useState(null)
   const [patientName, setPatientName] = useState('')
 
-  if (!unlocked) return <Shell><PasscodeGate onUnlock={() => setUnlocked(true)} /></Shell>
+  if (view === 'landing') return <LandingPage onEnterApp={() => setView('gate')} />
+
+  if (!unlocked) return <Shell><PasscodeGate onUnlock={() => { setUnlocked(true); setView('app') }} onBack={() => setView('landing')} /></Shell>
 
   const admin = isAdmin()
   const scopeDoctor = getScopeDoctor()
@@ -49,6 +52,7 @@ export default function App() {
   const doLock = () => {
     lock()
     setUnlocked(false)
+    setView('landing')
     closePatient()
     setTab('patients')
   }

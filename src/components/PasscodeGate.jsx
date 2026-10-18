@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { verifyPasscode, setSession } from '../lib/store.js'
 import { IS_DEMO, DEMO_STAFF_PASSCODE, DEMO_ADMIN_PASSCODE, DEMO_DOCTOR_PASSCODES, parseRole } from '../config.js'
 
-export default function PasscodeGate({ onUnlock }) {
+export default function PasscodeGate({ onUnlock, onBack }) {
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [checking, setChecking] = useState(false)
@@ -62,6 +62,7 @@ export default function PasscodeGate({ onUnlock }) {
           </button>
         </form>
         {error && <p className="error-text" role="alert">{error}</p>}
+        {onBack && <button type="button" className="btn-ghost" onClick={onBack} style={{ marginTop: 8 }}>← Back to Website</button>}
       </div>
     </main>
   )
