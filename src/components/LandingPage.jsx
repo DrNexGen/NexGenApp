@@ -1,7 +1,10 @@
 import { useState } from 'react'
 
-const PHOTO_HERO = 'https://lh3.googleusercontent.com/gps-cs-s/ANWiy9SPFEw2mG97D9xwX_QUtzTlGutBcxqK-CoZNMeE8eZb8lN0aPJYQ1YFRIAsdOgMTt1kcMdUkL_2b-HBH7guRhSpKtN4osf_jNv020mTHp4iQNDCycp4WFdgZueiX6vGFWmQO8EJXZwKemJ7=s680-w680-h510-rw'
-const PHOTO_CLINIC = 'https://lh3.googleusercontent.com/gps-cs-s/ANWiy9Ri1lkxdJrST8gvvCA3gbQJAJlhXULBtS0__j4_yBYOYa2UMNRVCpFALaUMdrHJ_BC52l_ncDyECmtOlCjcyNmwEafk-o0BYXaKHuadv4mHy3SZgioIJtrmwcNBDBcTRMy-Sn3wKnTuGnE=w284-h203-n-k-no-nu'
+const PHOTO_LOGO = '/images/image1.png'
+const PHOTO_PHYSIO = '/images/image2.png'
+const PHOTO_RECEPTION = '/images/image3.png'
+const PHOTO_DOCTORS = '/images/image4.png'
+const PHOTO_CLINIC = '/images/image5.png'
 
 export default function LandingPage({ onEnterApp }) {
   const [showMap, setShowMap] = useState(false)
@@ -11,11 +14,11 @@ export default function LandingPage({ onEnterApp }) {
       {/* Hero */}
       <section className="hero">
         <div className="hero-overlay" />
-        <img src={PHOTO_HERO} alt="NexGen Ortho & Physio Care clinic" className="hero-img" />
+        <img src={PHOTO_LOGO} alt="NexGen Ortho & Physio Care" className="hero-img" />
         <div className="hero-content">
           <div className="hero-badge">Open 24 Hours</div>
           <h1 className="hero-title">NexGen Ortho &<br />Physio Care</h1>
-          <p className="hero-sub">Expert Orthopaedic & Physiotherapy Care in Bengaluru</p>
+          <p className="hero-sub">Expert Orthopaedic, Physiotherapy & Physician Care in Bengaluru</p>
           <div className="hero-actions">
             <a href="tel:09480038423" className="hero-btn hero-btn-primary">
               <IconPhone /> Call Now
@@ -58,13 +61,13 @@ export default function LandingPage({ onEnterApp }) {
       <section className="land-section">
         <h2 className="land-heading">About Us</h2>
         <div className="about-grid">
-          <img src={PHOTO_CLINIC} alt="Clinic interior" className="about-photo" />
+          <img src={PHOTO_CLINIC} alt="NexGen clinic interior" className="about-photo" />
           <div className="about-text-block">
             <p>
-              NexGen Ortho & Physio Care is a leading orthopaedic and physiotherapy
-              clinic located on New BEL Road, Bengaluru. We provide comprehensive
-              musculoskeletal care with state-of-the-art facilities and experienced
-              specialists.
+              NexGen Ortho & Physio Care is a leading multi-speciality clinic
+              located on New BEL Road, Bengaluru. We provide comprehensive
+              orthopaedic, physiotherapy, and physician care with state-of-the-art
+              facilities and experienced specialists.
             </p>
             <p>
               From fracture management and joint care to post-surgical rehabilitation
@@ -72,6 +75,11 @@ export default function LandingPage({ onEnterApp }) {
               your best, pain-free life.
             </p>
           </div>
+        </div>
+        <div className="gallery">
+          <img src={PHOTO_RECEPTION} alt="Reception" className="gallery-img" />
+          <img src={PHOTO_PHYSIO} alt="Physiotherapy room" className="gallery-img" />
+          <img src={PHOTO_DOCTORS} alt="Our doctors" className="gallery-img" />
         </div>
       </section>
 
@@ -103,10 +111,16 @@ export default function LandingPage({ onEnterApp }) {
             color="var(--teal-700)"
           />
           <DoctorCard
-            name="Dr. Umashankar"
-            dept="Physiotherapy"
-            desc="Expert in rehabilitation, manual therapy, electrotherapy, and post-surgical recovery."
+            name="Dr. Umashankar G.B"
+            dept="Physiotherapy · MPT in Sports"
+            desc="Expert in sports physiotherapy, rehabilitation, manual therapy, and post-surgical recovery."
             color="var(--teal-600)"
+          />
+          <DoctorCard
+            name="Dr. Praveen Kumar P"
+            dept="Physician · MD Internal Medicine"
+            desc="Consultant physician specialising in internal medicine, general health, and chronic disease management."
+            color="#6366f1"
           />
         </div>
       </section>

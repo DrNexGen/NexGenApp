@@ -1092,6 +1092,22 @@ body {
 
 .footer-staff:hover { color: #fff; }
 
+/* Gallery */
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.gallery-img {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
 /* Mobile responsive */
 @media (max-width: 640px) {
   .hero { min-height: 440px; }
@@ -1105,4 +1121,5 @@ body {
   .about-grid { grid-template-columns: 1fr; }
   .services-grid { grid-template-columns: 1fr; }
   .doctors-grid { grid-template-columns: 1fr; }
+  .gallery { grid-template-columns: 1fr; }
 }
