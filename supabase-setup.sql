@@ -1,10 +1,11 @@
 -- ============================================================
--- Anugiri Dental Clinic — Supabase setup
+-- NexGen Hospital (Orthopaedics & Physiotherapy) — Supabase setup
 -- Run once in: Supabase Dashboard -> SQL Editor -> New query
 --
--- IMPORTANT: change BOTH passcodes on the marked lines below!
---   staff passcode  -> assistants use it (bookings, reports upload)
---   admin passcode  -> Dr. Revathi only (money reports, export, delete)
+-- IMPORTANT: change the FOUR passcodes on the marked lines below!
+--   staff  -> assistants (book/manage, no money reports, no deletes)
+--   admin  -> owner: sees ALL doctors' data, money reports, export, delete
+--   Dr. Varun / Dr. Umashankar -> each sees ONLY their own data & earnings
 -- ============================================================
 
 create table if not exists public.patients (
