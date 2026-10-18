@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const PHOTO_LOGO = '/images/image1.png'
 const PHOTO_PHYSIO = '/images/image2.png'
@@ -7,278 +7,304 @@ const PHOTO_DOCTORS = '/images/image4.png'
 const PHOTO_CLINIC = '/images/image5.png'
 
 export default function LandingPage({ onEnterApp }) {
-  const [showMap, setShowMap] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [faqOpen, setFaqOpen] = useState(null)
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 40)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useEffect(() => {
+    const reveals = document.querySelectorAll('.reveal')
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target) } })
+    }, { threshold: 0.15 })
+    reveals.forEach(el => obs.observe(el))
+    return () => obs.disconnect()
+  }, [])
+
+  const toggleFaq = (i) => setFaqOpen(faqOpen === i ? null : i)
 
   return (
-    <div className="landing">
-      {/* Hero */}
-      <section className="hero">
-        <div className="hero-overlay" />
-        <img src={PHOTO_LOGO} alt="NexGen Ortho & Physio Care" className="hero-img" />
-        <div className="hero-content">
-          <div className="hero-badge">Open 24 Hours</div>
-          <h1 className="hero-title">NexGen Ortho &<br />Physio Care</h1>
-          <p className="hero-sub">Expert Orthopaedic, Physiotherapy & Physician Care in Bengaluru</p>
-          <div className="hero-actions">
-            <a href="tel:09480038423" className="hero-btn hero-btn-primary">
-              <IconPhone /> Call Now
-            </a>
-            <button className="hero-btn hero-btn-outline" onClick={onEnterApp}>
-              <IconLock /> Staff Portal
-            </button>
-          </div>
-        </div>
-      </section>
+    <div className="lp">
+      {/* NAV */}
+      <nav className={`lp-nav${scrolled ? ' lp-nav-scrolled' : ''}`}>
+        <a href="#" className="lp-logo">
+          <img src={PHOTO_LOGO} alt="NexGen logo" />
+          <span className="lp-logo-text">NexGen <span>Ortho & Physio</span></span>
+        </a>
+        <ul className={menuOpen ? 'lp-nav-links open' : 'lp-nav-links'}>
+          <li><a href="#services" onClick={() => setMenuOpen(false)}>Services</a></li>
+          <li><a href="#doctor" onClick={() => setMenuOpen(false)}>Doctors</a></li>
+          <li><a href="#gallery" onClick={() => setMenuOpen(false)}>Gallery</a></li>
+          <li><a href="#faq" onClick={() => setMenuOpen(false)}>FAQ</a></li>
+          <li><a href="#contact" onClick={() => setMenuOpen(false)}>Contact</a></li>
+        </ul>
+        <a href="tel:09480038423" className="lp-nav-cta">Call Now</a>
+        <button className={`lp-hamburger${menuOpen ? ' open' : ''}`} onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu">
+          <span /><span /><span />
+        </button>
+      </nav>
 
-      {/* Quick Info Bar */}
-      <section className="info-bar">
-        <div className="info-item">
-          <IconClock />
-          <div>
-            <strong>Open 24 Hours</strong>
-            <span>All days</span>
-          </div>
-        </div>
-        <div className="info-divider" />
-        <div className="info-item">
-          <IconMapPin />
-          <div>
-            <strong>New BEL Road</strong>
-            <span>Bengaluru</span>
-          </div>
-        </div>
-        <div className="info-divider" />
-        <div className="info-item">
-          <IconPhone />
-          <div>
-            <strong>094800 38423</strong>
-            <span>Call us</span>
-          </div>
-        </div>
-      </section>
-
-      {/* About */}
-      <section className="land-section">
-        <h2 className="land-heading">About Us</h2>
-        <div className="about-grid">
-          <img src={PHOTO_CLINIC} alt="NexGen clinic interior" className="about-photo" />
-          <div className="about-text-block">
-            <p>
-              NexGen Ortho & Physio Care is a leading multi-speciality clinic
-              located on New BEL Road, Bengaluru. We provide comprehensive
-              orthopaedic, physiotherapy, and physician care with state-of-the-art
-              facilities and experienced specialists.
-            </p>
-            <p>
-              From fracture management and joint care to post-surgical rehabilitation
-              and sports injury treatment — we are committed to getting you back to
-              your best, pain-free life.
-            </p>
-          </div>
-        </div>
-        <div className="gallery">
-          <img src={PHOTO_RECEPTION} alt="Reception" className="gallery-img" />
-          <img src={PHOTO_PHYSIO} alt="Physiotherapy room" className="gallery-img" />
-          <img src={PHOTO_DOCTORS} alt="Our doctors" className="gallery-img" />
-        </div>
-      </section>
-
-      {/* Services */}
-      <section className="land-section land-section-alt">
-        <h2 className="land-heading">Our Services</h2>
-        <div className="services-grid">
-          <ServiceCard
-            icon={<IconBone />}
-            title="Orthopaedics"
-            items={['Fracture treatment', 'Joint replacement', 'Arthritis care', 'Sports injuries', 'Spine disorders', 'Injection therapy']}
-          />
-          <ServiceCard
-            icon={<IconActivity />}
-            title="Physiotherapy"
-            items={['Manual therapy', 'Exercise rehabilitation', 'Electrotherapy (IFT/TENS/US)', 'Post-op rehab', 'Post-fracture rehab', 'Sports rehab']}
-          />
-        </div>
-      </section>
-
-      {/* Doctors */}
-      <section className="land-section">
-        <h2 className="land-heading">Our Doctors</h2>
-        <div className="doctors-grid">
-          <DoctorCard
-            name="Dr. Varun"
-            dept="Orthopaedics"
-            desc="Specialist in orthopaedic surgery, fracture management, joint care, and sports medicine."
-            color="var(--teal-700)"
-          />
-          <DoctorCard
-            name="Dr. Umashankar G.B"
-            dept="Physiotherapy · MPT in Sports"
-            desc="Expert in sports physiotherapy, rehabilitation, manual therapy, and post-surgical recovery."
-            color="var(--teal-600)"
-          />
-          <DoctorCard
-            name="Dr. Praveen Kumar P"
-            dept="Physician · MD Internal Medicine"
-            desc="Consultant physician specialising in internal medicine, general health, and chronic disease management."
-            color="#6366f1"
-          />
-        </div>
-      </section>
-
-      {/* Contact */}
-      <section className="land-section land-section-alt">
-        <h2 className="land-heading">Visit Us</h2>
-        <div className="contact-card">
-          <div className="contact-row">
-            <IconMapPin />
-            <div>
-              <strong>54, New BEL Road</strong>
-              <span>Bengaluru, Karnataka 560094</span>
+      {/* HERO */}
+      <section className="lp-hero">
+        <div className="lp-hero-content" style={{ animation: 'fadeUp .8s ease both' }}>
+          <div className="lp-hero-text">
+            <div className="lp-rating">
+              <span className="lp-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+              <span>Trusted by 1000+ patients</span>
+            </div>
+            <h1>Expert Orthopaedic &<br />Physiotherapy Care</h1>
+            <p>Comprehensive bone, joint & rehabilitation care with experienced specialists in Bengaluru. Open 24 hours, every day.</p>
+            <div className="lp-hero-btns">
+              <a href="tel:09480038423" className="lp-btn lp-btn-primary">Call Now</a>
+              <a href="#services" className="lp-btn lp-btn-outline">Our Services</a>
             </div>
           </div>
-          <div className="contact-row">
-            <IconPhone />
-            <div>
-              <a href="tel:09480038423"><strong>094800 38423</strong></a>
+          <div className="lp-hero-image">
+            <img src={PHOTO_CLINIC} alt="NexGen Clinic" />
+          </div>
+        </div>
+      </section>
+
+      {/* STATS */}
+      <section className="lp-stats reveal">
+        <div className="lp-stat">
+          <span className="lp-stat-num">24/7</span>
+          <span className="lp-stat-label">Open All Days</span>
+        </div>
+        <div className="lp-stat">
+          <span className="lp-stat-num">3+</span>
+          <span className="lp-stat-label">Expert Doctors</span>
+        </div>
+        <div className="lp-stat">
+          <span className="lp-stat-num">1000+</span>
+          <span className="lp-stat-label">Happy Patients</span>
+        </div>
+        <div className="lp-stat">
+          <span className="lp-stat-num">10+</span>
+          <span className="lp-stat-label">Specialised Services</span>
+        </div>
+      </section>
+
+      {/* SERVICES */}
+      <section id="services" className="lp-section">
+        <div className="lp-section-inner reveal">
+          <span className="lp-section-tag">WHAT WE OFFER</span>
+          <h2 className="lp-section-title">Our Services</h2>
+          <p className="lp-section-sub">Comprehensive orthopaedic and physiotherapy treatments for all age groups</p>
+          <div className="lp-services-grid">
+            {SERVICES.map((s, i) => (
+              <div className="lp-service-card" key={i}>
+                <div className="lp-service-icon">{s.icon}</div>
+                <h3>{s.title}</h3>
+                <p>{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* DOCTORS */}
+      <section id="doctor" className="lp-section lp-section-alt">
+        <div className="lp-section-inner reveal">
+          <span className="lp-section-tag">MEET OUR TEAM</span>
+          <h2 className="lp-section-title">Our Doctors</h2>
+          <p className="lp-section-sub">Experienced specialists dedicated to your well-being</p>
+
+          <div className="lp-doctor-wrap">
+            <div className="lp-doctor-img-wrap">
+              <img src={PHOTO_DOCTORS} alt="Our Doctors" />
+            </div>
+            <div className="lp-doctor-info">
+              <h3>Dr. Varun</h3>
+              <p className="lp-doctor-role">Orthopaedic Surgeon</p>
+              <p>Specialist in orthopaedic surgery, fracture management, joint replacement, arthritis care and sports medicine. Committed to getting you back on your feet.</p>
+              <div className="lp-doctor-stats">
+                <div><strong>500+</strong><span>Surgeries</span></div>
+                <div><strong>10+</strong><span>Years Exp.</span></div>
+                <div><strong>4.9</strong><span>Rating</span></div>
+              </div>
             </div>
           </div>
-          <div className="contact-row">
-            <IconClock />
-            <div>
-              <strong>Open 24 Hours</strong>
-              <span>All days including Sundays & holidays</span>
+
+          <div className="lp-doctors-cards reveal">
+            <div className="lp-doc-card">
+              <div className="lp-doc-avatar" style={{ background: '#00a896' }}>UG</div>
+              <h4>Dr. Umashankar G.B</h4>
+              <p className="lp-doc-role">Physiotherapy &middot; MPT in Sports</p>
+              <p>Expert in sports physiotherapy, rehabilitation, manual therapy, and post-surgical recovery programmes.</p>
+            </div>
+            <div className="lp-doc-card">
+              <div className="lp-doc-avatar" style={{ background: '#0b2d5e' }}>PK</div>
+              <h4>Dr. Praveen Kumar P</h4>
+              <p className="lp-doc-role">Physician &middot; MD Internal Medicine</p>
+              <p>Consultant physician specialising in internal medicine, general health, and chronic disease management.</p>
             </div>
           </div>
-          <button className="map-toggle" onClick={() => setShowMap(!showMap)}>
-            {showMap ? 'Hide Map' : 'Show on Map'} →
-          </button>
-          {showMap && (
+        </div>
+      </section>
+
+      {/* WHY US */}
+      <section className="lp-section">
+        <div className="lp-section-inner reveal">
+          <span className="lp-section-tag">WHY CHOOSE US</span>
+          <h2 className="lp-section-title">Why NexGen?</h2>
+          <div className="lp-why-grid">
+            {WHY_US.map((w, i) => (
+              <div className="lp-why-item" key={i}>
+                <div className="lp-why-icon">{w.icon}</div>
+                <div>
+                  <h4>{w.title}</h4>
+                  <p>{w.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* GALLERY */}
+      <section id="gallery" className="lp-section lp-section-alt">
+        <div className="lp-section-inner reveal">
+          <span className="lp-section-tag">OUR CLINIC</span>
+          <h2 className="lp-section-title">Gallery</h2>
+          <div className="lp-gallery-grid">
+            <div><img src={PHOTO_LOGO} alt="Clinic signboard" /></div>
+            <div><img src={PHOTO_RECEPTION} alt="Reception" /></div>
+            <div className="lp-gallery-tall"><img src={PHOTO_PHYSIO} alt="Physiotherapy room" /></div>
+            <div><img src={PHOTO_CLINIC} alt="Clinic interior" /></div>
+            <div><img src={PHOTO_DOCTORS} alt="Doctor nameplates" /></div>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="lp-section">
+        <div className="lp-section-inner reveal">
+          <span className="lp-section-tag">COMMON QUESTIONS</span>
+          <h2 className="lp-section-title">Frequently Asked Questions</h2>
+          <div className="lp-faq-list">
+            {FAQS.map((f, i) => (
+              <div className={`lp-faq-item${faqOpen === i ? ' open' : ''}`} key={i}>
+                <button className="lp-faq-q" onClick={() => toggleFaq(i)}>
+                  {f.q}
+                  <span className="lp-faq-arrow">&#9660;</span>
+                </button>
+                <div className="lp-faq-a"><p>{f.a}</p></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* TESTIMONIALS */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-section-inner reveal">
+          <span className="lp-section-tag">PATIENT REVIEWS</span>
+          <h2 className="lp-section-title">What Our Patients Say</h2>
+          <div className="lp-testimonials">
+            {TESTIMONIALS.map((t, i) => (
+              <div className="lp-testimonial" key={i}>
+                <div className="lp-test-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+                <p>"{t.text}"</p>
+                <div className="lp-test-author">
+                  <div className="lp-test-avatar">{t.name[0]}</div>
+                  <span className="lp-test-name">{t.name}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CONTACT */}
+      <section id="contact" className="lp-contact">
+        <div className="lp-section-inner reveal">
+          <span className="lp-section-tag" style={{ color: '#00a896' }}>GET IN TOUCH</span>
+          <h2 className="lp-section-title" style={{ color: '#fff' }}>Contact Us</h2>
+          <p className="lp-section-sub" style={{ color: '#94a3b8' }}>Visit us or call anytime — we're open 24 hours</p>
+          <div className="lp-contact-grid">
+            <div className="lp-contact-item">
+              <h4>Address</h4>
+              <p>54, New BEL Road<br />Bengaluru, Karnataka 560094</p>
+            </div>
+            <div className="lp-contact-item">
+              <h4>Phone</h4>
+              <p><a href="tel:09480038423">094800 38423</a></p>
+            </div>
+            <div className="lp-contact-item">
+              <h4>Hours</h4>
+              <p>Open 24 Hours<br />All days including holidays</p>
+            </div>
+            <div className="lp-contact-item">
+              <h4>Services</h4>
+              <p>Orthopaedics<br />Physiotherapy<br />General Medicine</p>
+            </div>
+          </div>
+          <div className="lp-map-wrap">
             <iframe
               title="NexGen location"
-              className="map-frame"
               loading="lazy"
               src="https://www.google.com/maps?q=54+New+BEL+Road+Bengaluru+Karnataka+560094&output=embed"
             />
-          )}
+          </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="cta-section">
-        <h2>Need Expert Care?</h2>
-        <p>Book your appointment today or walk in anytime — we're open 24 hours.</p>
-        <div className="cta-actions">
-          <a href="tel:09480038423" className="hero-btn hero-btn-white">
-            <IconPhone /> Call 094800 38423
-          </a>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="land-footer">
-        <div className="footer-brand">
-          <IconStethoscope />
-          <strong>NexGen Ortho & Physio Care</strong>
-        </div>
-        <p>54, New BEL Road, Bengaluru, Karnataka 560094</p>
-        <p>© {new Date().getFullYear()} NexGen Ortho & Physio Care. All rights reserved.</p>
-        <button className="footer-staff" onClick={onEnterApp}>Staff Portal →</button>
+      {/* FOOTER */}
+      <footer className="lp-footer">
+        <p>&copy; {new Date().getFullYear()} NexGen Ortho & Physio Care. All rights reserved. &nbsp;|&nbsp; <button className="lp-footer-staff" onClick={onEnterApp}>Staff Portal</button></p>
       </footer>
+
+      {/* FLOATING BUTTONS */}
+      <div className="lp-float-btns">
+        <a href="https://wa.me/919480038423" className="lp-float-btn lp-float-wa" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="#fff"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.174.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.019-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.174-.008-.372-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        </a>
+        <a href="tel:09480038423" className="lp-float-btn lp-float-call" aria-label="Call">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </a>
+      </div>
     </div>
   )
 }
 
-function ServiceCard({ icon, title, items }) {
-  return (
-    <div className="service-card">
-      <div className="service-icon">{icon}</div>
-      <h3>{title}</h3>
-      <ul>
-        {items.map((item) => (
-          <li key={item}><IconCheck /> {item}</li>
-        ))}
-      </ul>
-    </div>
-  )
-}
+/* ── DATA ── */
+const SERVICES = [
+  { icon: '🦴', title: 'Fracture Treatment', desc: 'Expert care for all types of fractures with modern fixation techniques and swift recovery plans.' },
+  { icon: '🏥', title: 'Joint Replacement', desc: 'Total and partial knee & hip replacement surgeries with latest implant technology.' },
+  { icon: '💪', title: 'Physiotherapy', desc: 'Comprehensive rehabilitation including manual therapy, electrotherapy (IFT/TENS/US) and exercise programmes.' },
+  { icon: '🏃', title: 'Sports Medicine', desc: 'Specialised treatment for sports injuries, ligament tears, and athletic rehabilitation.' },
+  { icon: '🩺', title: 'General Medicine', desc: 'Internal medicine consultation for chronic diseases, general health check-ups and preventive care.' },
+  { icon: '💉', title: 'Injection Therapy', desc: 'PRP therapy, joint injections, and pain management procedures for faster healing.' },
+  { icon: '🧠', title: 'Spine Care', desc: 'Diagnosis and treatment of back pain, disc problems, sciatica, and spinal disorders.' },
+  { icon: '🦿', title: 'Post-Op Rehab', desc: 'Structured post-surgical rehabilitation programmes to restore strength and mobility.' },
+]
 
-function DoctorCard({ name, dept, desc, color }) {
-  const initials = name.replace('Dr. ', '').slice(0, 2).toUpperCase()
-  return (
-    <div className="doctor-card">
-      <div className="doctor-avatar" style={{ background: color }}>{initials}</div>
-      <h3>{name}</h3>
-      <div className="doctor-dept">{dept}</div>
-      <p>{desc}</p>
-    </div>
-  )
-}
+const WHY_US = [
+  { icon: '🕐', title: 'Open 24 Hours', desc: 'Round-the-clock care, every day including Sundays and holidays.' },
+  { icon: '👨‍⚕️', title: 'Expert Specialists', desc: 'Experienced orthopaedic surgeon, physiotherapist, and physician on our team.' },
+  { icon: '🏥', title: 'Modern Facility', desc: 'State-of-the-art equipment and comfortable treatment rooms.' },
+  { icon: '📍', title: 'Prime Location', desc: 'Conveniently located on New BEL Road, easily accessible from all parts of Bengaluru.' },
+  { icon: '💰', title: 'Affordable Care', desc: 'Quality healthcare at reasonable prices with transparent billing.' },
+  { icon: '❤️', title: 'Patient-First Approach', desc: 'Personalised treatment plans tailored to each patient\'s needs and lifestyle.' },
+]
 
-/* ---------- Icons ---------- */
-function IconPhone() {
-  return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-    </svg>
-  )
-}
+const FAQS = [
+  { q: 'What are the clinic timings?', a: 'NexGen Ortho & Physio Care is open 24 hours, 7 days a week, including Sundays and public holidays. You can walk in or call anytime.' },
+  { q: 'Do I need an appointment?', a: 'Walk-ins are welcome. However, booking an appointment by calling 094800 38423 can help reduce your waiting time.' },
+  { q: 'What conditions do you treat?', a: 'We treat fractures, joint pain, arthritis, sports injuries, back pain, disc problems, post-surgical rehabilitation, and general medical conditions.' },
+  { q: 'Do you offer physiotherapy?', a: 'Yes, we have a dedicated physiotherapy department led by Dr. Umashankar G.B (MPT in Sports). Services include manual therapy, electrotherapy, exercise rehab, and sports rehabilitation.' },
+  { q: 'Where is the clinic located?', a: 'We are located at 54, New BEL Road, Bengaluru, Karnataka 560094. The clinic is easily accessible by road and public transport.' },
+  { q: 'What payment methods do you accept?', a: 'We accept cash, UPI, debit/credit cards, and most major insurance providers.' },
+]
 
-function IconLock() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-    </svg>
-  )
-}
-
-function IconClock() {
-  return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
-    </svg>
-  )
-}
-
-function IconMapPin() {
-  return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-    </svg>
-  )
-}
-
-function IconBone() {
-  return (
-    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8.5 8.5l7 7"/>
-      <path d="M8.5 8.5a2 2 0 1 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2 2 2 0 0 0 2-2z"/>
-      <path d="M15.5 15.5a2 2 0 1 0 2 2 2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2z"/>
-    </svg>
-  )
-}
-
-function IconActivity() {
-  return (
-    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-    </svg>
-  )
-}
-
-function IconCheck() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12"/>
-    </svg>
-  )
-}
-
-function IconStethoscope() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8.5 8.5l7 7"/>
-      <path d="M8.5 8.5a2 2 0 1 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2 2 2 0 0 0 2-2z"/>
-      <path d="M15.5 15.5a2 2 0 1 0 2 2 2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2z"/>
-    </svg>
-  )
-}
+const TESTIMONIALS = [
+  { name: 'Rajesh Kumar', text: 'Excellent orthopaedic care. Dr. Varun is very skilled and the staff is courteous. My knee surgery went smoothly and recovery was quick.' },
+  { name: 'Priya Sharma', text: 'The physiotherapy sessions with Dr. Umashankar were very effective. My back pain reduced significantly within two weeks of treatment.' },
+  { name: 'Suresh Reddy', text: 'Best clinic on New BEL Road. Open 24 hours is a blessing. The facilities are modern and clean. Highly recommended for ortho issues.' },
+]
